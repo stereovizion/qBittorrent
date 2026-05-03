@@ -42,6 +42,7 @@
 #include "base/global.h"
 #include "base/preferences.h"
 #include "base/unicodestrings.h"
+#include "base/utils/net.h"
 #include "gui/desktopintegration.h"
 #include "gui/mainwindow.h"
 #include "interfaces/iguiapplication.h"
@@ -52,6 +53,9 @@ namespace
     {
          return u"<a href=\"%1\">%2</a>"_s.arg(url, linkLabel);
     }
+
+    // Special marker for IPv4 + temporary IPv6 addresses
+    constexpr std::string_view TEMP_IPV6_MARKER = "::ffff:0:0";
 
     enum AdvSettingsCols
     {
@@ -430,6 +434,7 @@ void AdvancedSettings::updateInterfaceAddressCombo()
     m_comboBoxInterfaceAddress.addItem(tr("All addresses"), QString());
     m_comboBoxInterfaceAddress.addItem(tr("All IPv4 addresses"), QHostAddress(QHostAddress::AnyIPv4).toString());
     m_comboBoxInterfaceAddress.addItem(tr("All IPv6 addresses"), QHostAddress(QHostAddress::AnyIPv6).toString());
+    m_comboBoxInterfaceAddress.addItem(tr("All IPv4 and temporary IPv6 addresses"), QString::fromStdString(std::string(TEMP_IPV6_MARKER)));
 
     const QString currentIface = m_comboBoxInterface.currentData().toString();
     if (currentIface.isEmpty())  // `any` interface

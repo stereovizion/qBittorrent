@@ -28,11 +28,14 @@
 
 #include "net.h"
 
+#include <QByteArray>
+#include <QFile>
 #include <QList>
 #include <QNetworkInterface>
 #include <QSslCertificate>
 #include <QSslKey>
 #include <QString>
+#include <QTextStream>
 
 #include "base/global.h"
 
@@ -201,6 +204,40 @@ namespace Utils
             QHostAddress canonical(addr.toIPv6Address());
             canonical.setScopeId(QString::number(id));
             return canonical;
+        }
+
+        bool isTemporaryIPv6(const QHostAddress &address)
+        {
+            if (address.protocol() != QAbstractSocket::IPv6Protocol)
+                return false;
+
+#ifdef Q_OS_LINUX
+            QFile file(u"/proc/net/if_inet6"_s);
+            if (file.open(QIODevice::ReadOnly | QIODevice::Text))
+            {
+                const Q_IPV6ADDR ipv6Addr = address.toIPv6Address();
+                const QByteArray target = QByteArray(reinterpret_cast<const char *>(ipv6Addr.c), 16).toHex();
+                QTextStream in(&file);
+                while (!in.atEnd())
+                {
+                    const QString line = in.readLine();
+                    const QStringList parts = line.split(u' ', Qt::SkipEmptyParts);
+                    if ((parts.size() >= 5) && (parts[0].compare(target, Qt::CaseInsensitive) == 0))
+                    {
+                        bool ok = false;
+                        const uint flags = parts[4].toUInt(&ok, 16);
+                        if (ok && (flags & 0x01)) // IFA_F_TEMPORARY
+                            return true;
+                    }
+                }
+            }
+#endif
+
+            // Fallback heuristic
+            const QString addr = address.toString();
+            return !addr.startsWith(u"fe80") && 
+                   !addr.startsWith(u"ff") && // multicast
+                   !addr.startsWith(u"::1");
         }
 
         std::optional<IPRange> parseIPRange(QStringView filterStr, const bool isStrictIPv4)

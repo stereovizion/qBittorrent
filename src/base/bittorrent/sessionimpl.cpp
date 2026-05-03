@@ -129,6 +129,9 @@ namespace
     const auto USER_AGENT = QStringLiteral("qBittorrent/" QBT_VERSION_2);
     const QString DEFAULT_DHT_BOOTSTRAP_NODES = u"dht.libtorrent.org:25401, dht.transmissionbt.com:6881, router.bittorrent.com:6881"_s;
 
+    // Special marker for IPv4 + temporary IPv6 addresses
+    constexpr std::string_view TEMP_IPV6_MARKER = "::ffff:0:0";
+
     void torrentQueuePositionUp(const lt::torrent_handle &handle)
     {
         try
@@ -3390,6 +3393,7 @@ QStringList SessionImpl::getListeningIPs() const
     const QHostAddress configuredAddr(ifaceAddr);
     const bool allIPv4 = (ifaceAddr == u"0.0.0.0"); // Means All IPv4 addresses
     const bool allIPv6 = (ifaceAddr == u"::"); // Means All IPv6 addresses
+    const bool isTempIPv6 = (ifaceAddr == QString::fromStdString(std::string(TEMP_IPV6_MARKER)));
 
     if (!ifaceAddr.isEmpty() && !allIPv4 && !allIPv6 && configuredAddr.isNull())
     {
@@ -3412,16 +3416,31 @@ QStringList SessionImpl::getListeningIPs() const
 
         if (allIPv6)
             return {u"::"_s};
+
+        if (isTempIPv6)
+        {
+            QStringList res = {u"0.0.0.0"_s};
+            for (const QHostAddress &addr : asConst(QNetworkInterface::allAddresses()))
+            {
+                if (Utils::Net::isTemporaryIPv6(addr))
+                    res.append(addr.toString());
+            }
+            return res;
+        }
     }
 
-    const auto checkAndAddIP = [allIPv4, allIPv6, &IPs](const QHostAddress &addr, const QHostAddress &match)
+    const auto checkAndAddIP = [allIPv4, allIPv6, isTempIPv6, &IPs](const QHostAddress &addr, const QHostAddress &match)
     {
         if ((allIPv4 && (addr.protocol() != QAbstractSocket::IPv4Protocol))
             || (allIPv6 && (addr.protocol() != QAbstractSocket::IPv6Protocol)))
             return;
 
-        if ((match == addr) || allIPv4 || allIPv6)
+        if ((match == addr) || allIPv4 || allIPv6
+            || (isTempIPv6 && (addr.protocol() == QAbstractSocket::IPv4Protocol))
+            || (isTempIPv6 && Utils::Net::isTemporaryIPv6(addr)))
+        {
             IPs.append(addr.toString());
+        }
     };
 
     if (ifaceName.isEmpty())

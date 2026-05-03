@@ -50,6 +50,7 @@ namespace Utils::Net
     QString subnetToString(const Subnet &subnet);
     IPRange subnetToIPRange(const Subnet &subnet);
     QHostAddress canonicalIPv6Addr(const QHostAddress &addr);
+    bool isTemporaryIPv6(const QHostAddress &address);
 
     std::optional<IPRange> parseIPRange(QStringView filterStr, bool isStrictIPv4 = false);
     QString ipRangeToString(const IPRange &ipRange);
